@@ -3,6 +3,7 @@
 React + Vite dashboard connected to the MOIL Express backend.
 
 ## Run
+
 1. Start MongoDB.
 2. In `../` run `npm install` and `npm run dev` (backend, port 3000).
 3. In this folder run `npm install` and `npm run dev` (frontend, normally port 5173).
@@ -11,6 +12,7 @@ React + Vite dashboard connected to the MOIL Express backend.
 Vite embeds `VITE_*` values during `npm run build`, so set this variable in the frontend build environment before deploying.
 
 ## Dynamic API connections
+
 - GET `/api/analytics/dashboard/:mine`
 - POST `/api/analytics/predict`
 - POST `/api/data/production`
