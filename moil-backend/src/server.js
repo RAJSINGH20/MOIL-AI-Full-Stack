@@ -5,7 +5,7 @@ import connectDB from './config/db.js'; import dataRoutes from './routes/data.ro
 
 const app = express();
 const frontendDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../frontend/dist');
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://127.0.0.1:5173')
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://127.0.0.1:5173,https://frontend-blue-alpha-88.vercel.app/')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
