@@ -34,9 +34,13 @@ import {
 } from "recharts";
 import "./styles.css";
 
-const API =
+const configuredApiUrl = (
   import.meta.env.VITE_API_URL ||
-  "https://moil-ai-full-stack-1.onrender.com/api";
+  "https://moil-ai-full-stack-1.onrender.com/api"
+).replace(/\/+$/, "");
+const API = configuredApiUrl.endsWith("/api")
+  ? configuredApiUrl
+  : `${configuredApiUrl}/api`;
 const api = axios.create({ baseURL: API });
 const mines = ["Dongri Buzurg", "Gumgaon", "Balaghat", "Tirodi"];
 
