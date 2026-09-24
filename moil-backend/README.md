@@ -14,6 +14,8 @@ copy .env.example .env
 npm run dev
 ```
 
+Set `HOST=0.0.0.0` and `PORT` from the deployment platform. Set `CLIENT_URL` to the frontend origin; multiple origins may be comma-separated. The frontend's `VITE_API_URL` must be configured before its production build because Vite embeds `VITE_*` variables into the bundle.
+
 ## Endpoints
 - `GET /api/health`
 - `POST /api/data/geology`
