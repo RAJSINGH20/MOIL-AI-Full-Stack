@@ -34,7 +34,7 @@ import {
 } from 'recharts';
 import './styles.css';
 
-const API = import.meta.env.VITE_API_URL || '/api';
+const API = import.meta.env.VITE_API_URL || 'https://moil-ai-full-stack-1.onrender.com/';
 const api = axios.create({ baseURL: API });
 const mines = ['Dongri Buzurg', 'Gumgaon', 'Balaghat', 'Tirodi'];
 
@@ -55,7 +55,7 @@ function App() {
       setDash(r.data);
       setMsg('');
     } catch (e) {
-      setMsg('Backend unavailable. Check the API URL and server status.');
+      setMsg('Backend unavailable. Start the API on port 3000.');
     } finally {
       setLoading(false);
     }
