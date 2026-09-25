@@ -85,22 +85,53 @@ function App() {
   };
 
   const analyzeMyLocation = () => {
+    const savedLocationKey = `moil-mine-location:${mine}`;
+    const savedLocation = localStorage.getItem(savedLocationKey);
+
+    setLocationLoading(true);
+
+    if (savedLocation) {
+      try {
+        const { latitude, longitude } = JSON.parse(savedLocation);
+        api
+          .post("/analytics/location-analysis", { mine, latitude, longitude })
+          .then((r) => {
+            setLocationAnalysis(r.data);
+            setMsg("Risk analysis completed using the saved mine location.");
+          })
+          .catch((e) => {
+            setMsg(
+              e.response?.data?.message || "Live location analysis failed.",
+            );
+          })
+          .finally(() => setLocationLoading(false));
+        return;
+      } catch {
+        localStorage.removeItem(savedLocationKey);
+      }
+    }
+
     if (!navigator.geolocation) {
+      setLocationLoading(false);
       setMsg("Live location is not supported by this browser.");
       return;
     }
-    setLocationLoading(true);
-    setMsg("Requesting your live location...");
+
+    setMsg("Saving this mine location for future checks...");
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         try {
-          const r = await api.post("/analytics/location-analysis", {
-            mine,
+          const location = {
             latitude: coords.latitude,
             longitude: coords.longitude,
+          };
+          localStorage.setItem(savedLocationKey, JSON.stringify(location));
+          const r = await api.post("/analytics/location-analysis", {
+            mine,
+            ...location,
           });
           setLocationAnalysis(r.data);
-          setMsg("Live location risk analysis completed.");
+          setMsg("Risk analysis completed and this mine location was saved.");
         } catch (e) {
           setMsg(e.response?.data?.message || "Live location analysis failed.");
         } finally {
