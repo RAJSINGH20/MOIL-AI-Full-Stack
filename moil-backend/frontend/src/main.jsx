@@ -1,15 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
-import {
-  Circle,
-  CircleMarker,
-  MapContainer,
-  Popup,
-  TileLayer,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   Activity,
@@ -552,26 +544,93 @@ function MineAssistant({ mine, dashboard }) {
   );
 }
 
-function MapClickHandler({ onSelect }) {
-  useMapEvents({
-    click(event) {
-      onSelect({
+function InteractiveLocationMap({
+  center,
+  selectedLocation,
+  nearbyCandidates,
+  locationAnalyses,
+  onSelectLocation,
+}) {
+  const mapNodeRef = useRef(null);
+  const mapRef = useRef(null);
+  const overlaysRef = useRef(null);
+
+  useEffect(() => {
+    const map = L.map(mapNodeRef.current).setView(center, 6);
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { attribution: "&copy; Esri, Maxar, Earthstar Geographics" },
+    ).addTo(map);
+    overlaysRef.current = L.layerGroup().addTo(map);
+    map.on("click", (event) => {
+      onSelectLocation({
         latitude: Number(event.latlng.lat.toFixed(6)),
         longitude: Number(event.latlng.lng.toFixed(6)),
       });
-    },
-  });
-  return null;
-}
+    });
+    mapRef.current = map;
 
-function MapViewport({ center, zoom }) {
-  const map = useMap();
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [onSelectLocation]);
 
   useEffect(() => {
-    map.setView(center, zoom);
-  }, [center, map, zoom]);
+    const map = mapRef.current;
+    const overlays = overlaysRef.current;
+    if (!map || !overlays) return;
 
-  return null;
+    map.setView(center, selectedLocation ? 13 : 6);
+    overlays.clearLayers();
+
+    nearbyCandidates.forEach((candidate, index) => {
+      L.circleMarker([candidate.latitude, candidate.longitude], {
+        radius: 7,
+        color: "#f8fafc",
+        weight: 2,
+        fillColor: "#2563eb",
+        fillOpacity: 0.95,
+      })
+        .bindPopup(`Nearby candidate area ${index + 1}`)
+        .addTo(overlays);
+    });
+
+    locationAnalyses.forEach((analysis, index) => {
+      const areaStyle =
+        analysis.suitabilityStatus === "SUITABLE"
+          ? { color: "#047857", fillColor: "#10b981", fillOpacity: 0.28 }
+          : analysis.suitabilityStatus === "NOT_SUITABLE"
+            ? { color: "#b91c1c", fillColor: "#ef4444", fillOpacity: 0.24 }
+            : { color: "#b45309", fillColor: "#f59e0b", fillOpacity: 0.26 };
+      L.circle([analysis.latitude, analysis.longitude], {
+        radius: analysis.suitabilityStatus === "SUITABLE" ? 700 : 500,
+        ...areaStyle,
+      })
+        .bindPopup(
+          `<strong>Area ${locationAnalyses.length - index}</strong><br>${analysis.suitabilityStatus.replaceAll("_", " ")}<br>${analysis.suitabilityReason}`,
+        )
+        .addTo(overlays);
+    });
+
+    if (selectedLocation) {
+      L.circleMarker([selectedLocation.latitude, selectedLocation.longitude], {
+        radius: 9,
+        color: "#f8fafc",
+        weight: 3,
+        fillColor: "#059669",
+        fillOpacity: 0.95,
+      }).addTo(overlays);
+    }
+  }, [center, locationAnalyses, nearbyCandidates, selectedLocation]);
+
+  return (
+    <div
+      ref={mapNodeRef}
+      className="mt-3 h-72 w-full rounded-xl border border-slate-200 sm:h-80"
+      aria-label="Interactive satellite location map"
+    />
+  );
 }
 
 function LocationPicker({
@@ -593,82 +652,13 @@ function LocationPicker({
         Click any point on the satellite map, then run a separate mining
         suitability check for that area.
       </p>
-      <MapContainer
+      <InteractiveLocationMap
         center={center}
-        zoom={selectedLocation ? 13 : 6}
-        scrollWheelZoom
-        className="mt-3 h-72 w-full rounded-xl border border-slate-200 sm:h-80"
-      >
-        <MapViewport center={center} zoom={selectedLocation ? 13 : 6} />
-        <TileLayer
-          attribution='&copy; Esri, Maxar, Earthstar Geographics'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        />
-        <MapClickHandler onSelect={onSelectLocation} />
-        {nearbyCandidates.map((candidate, index) => (
-          <CircleMarker
-            key={`candidate-${candidate.latitude}-${candidate.longitude}`}
-            center={[candidate.latitude, candidate.longitude]}
-            radius={7}
-            pathOptions={{
-              color: "#f8fafc",
-              weight: 2,
-              fillColor: "#2563eb",
-              fillOpacity: 0.95,
-            }}
-          >
-            <Popup>Nearby candidate area {index + 1}</Popup>
-          </CircleMarker>
-        ))}
-        {locationAnalyses.map((analysis, index) => {
-          const areaStyle =
-            analysis.suitabilityStatus === "SUITABLE"
-              ? {
-                  color: "#047857",
-                  fillColor: "#10b981",
-                  fillOpacity: 0.28,
-                }
-              : analysis.suitabilityStatus === "NOT_SUITABLE"
-                ? {
-                    color: "#b91c1c",
-                    fillColor: "#ef4444",
-                    fillOpacity: 0.24,
-                  }
-                : {
-                    color: "#b45309",
-                    fillColor: "#f59e0b",
-                    fillOpacity: 0.26,
-                  };
-          return (
-            <Circle
-              key={`${analysis.latitude}-${analysis.longitude}-${index}`}
-              center={[analysis.latitude, analysis.longitude]}
-              radius={analysis.suitabilityStatus === "SUITABLE" ? 700 : 500}
-              pathOptions={areaStyle}
-            >
-              <Popup>
-                <strong>Area {locationAnalyses.length - index}</strong>
-                <br />
-                {analysis.suitabilityStatus.replaceAll("_", " ")}
-                <br />
-                {analysis.suitabilityReason}
-              </Popup>
-            </Circle>
-          );
-        })}
-        {selectedLocation && (
-          <CircleMarker
-            center={[selectedLocation.latitude, selectedLocation.longitude]}
-            radius={9}
-            pathOptions={{
-              color: "#f8fafc",
-              weight: 3,
-              fillColor: "#059669",
-              fillOpacity: 0.95,
-            }}
-          />
-        )}
-      </MapContainer>
+        selectedLocation={selectedLocation}
+        nearbyCandidates={nearbyCandidates}
+        locationAnalyses={locationAnalyses}
+        onSelectLocation={onSelectLocation}
+      />
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-slate-600">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Suitable area
