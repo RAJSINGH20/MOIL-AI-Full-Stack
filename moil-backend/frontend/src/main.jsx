@@ -768,6 +768,7 @@ function LocationPicker({
   onSuggestLocation,
   onSelectNearbyArea,
 }) {
+  const [localNearbyOpen, setLocalNearbyOpen] = useState(false);
   const center = selectedLocation
     ? [selectedLocation.latitude, selectedLocation.longitude]
     : [21.3, 79.1];
@@ -824,7 +825,10 @@ function LocationPicker({
         )}
         <button
           type="button"
-          onClick={onSuggestLocation}
+          onClick={() => {
+            setLocalNearbyOpen((open) => !open);
+            onSuggestLocation();
+          }}
           disabled={locationLoading}
           className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -835,7 +839,7 @@ function LocationPicker({
               : "Suggest Nearby Area"}
         </button>
       </div>
-      {showNearbyAreas && (
+            {(showNearbyAreas || localNearbyOpen) && (
         <NearbyAreaList
           areas={nearbyAreas}
           selectedLocation={selectedLocation}
