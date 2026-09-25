@@ -51,6 +51,7 @@ function App() {
   const [show, setShow] = useState(null);
   const [locationAnalysis, setLocationAnalysis] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [savedLocation, setSavedLocation] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -69,6 +70,13 @@ function App() {
 
   useEffect(() => {
     load();
+    const storedLocation = localStorage.getItem(`moil-mine-location:${mine}`);
+    try {
+      setSavedLocation(storedLocation ? JSON.parse(storedLocation) : null);
+    } catch {
+      setSavedLocation(null);
+    }
+    setLocationAnalysis(null);
   }, [mine]);
 
   const run = async () => {
@@ -126,6 +134,7 @@ function App() {
             longitude: coords.longitude,
           };
           localStorage.setItem(savedLocationKey, JSON.stringify(location));
+          setSavedLocation(location);
           const r = await api.post("/analytics/location-analysis", {
             mine,
             ...location,
@@ -291,6 +300,7 @@ function App() {
               tab={tab}
               mine={mine}
               dash={dash}
+              savedLocation={savedLocation}
               onAdd={setShow}
             />
           )}
@@ -677,6 +687,47 @@ function LocationAnalysis({ result }) {
   );
 }
 
+function SavedLocation({ mine, location }) {
+  if (!location) {
+    return (
+      <Card title="Mine Location">
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          No saved location is available for {mine}. Run the location check
+          from Overview once to save this mine position.
+        </p>
+      </Card>
+    );
+  }
+
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.02}%2C${latitude - 0.02}%2C${longitude + 0.02}%2C${latitude + 0.02}&layer=mapnik&marker=${latitude}%2C${longitude}`;
+  const fullMapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=14/${latitude}/${longitude}`;
+
+  return (
+    <Card title="Mine Location">
+      <p className="mt-3 text-sm font-semibold text-slate-800">{mine}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        Saved coordinates: {latitude.toFixed(5)}, {longitude.toFixed(5)}
+      </p>
+      <iframe
+        title={`${mine} saved location map`}
+        src={mapUrl}
+        className="mt-3 h-52 w-full rounded-xl border border-slate-200"
+        loading="lazy"
+      />
+      <a
+        href={fullMapUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 inline-flex text-xs font-semibold text-emerald-700 hover:text-emerald-600"
+      >
+        Open saved location in map
+      </a>
+    </Card>
+  );
+}
+
 function K({ title, value, icon: Icon, danger }) {
   return (
     <div className="group relative isolate transform-gpu rounded-2xl border border-slate-200 bg-white p-4 shadow-soft transition duration-300 ease-out motion-safe:animate-rise-in hover:-translate-y-1 hover:border-emerald-300 hover:shadow-motion-card hover:[transform:perspective(900px)_rotateX(1deg)_translateY(-4px)]">
@@ -750,7 +801,7 @@ function Metric({ I, n, v }) {
   );
 }
 
-function Module({ tab, mine, dash, onAdd }) {
+function Module({ tab, mine, dash, savedLocation, onAdd }) {
   const rows = dash?.productionTrend || [];
   const geology = dash?.geologicalData || [];
   const prediction = dash?.latestPrediction || {};
@@ -766,12 +817,14 @@ function Module({ tab, mine, dash, onAdd }) {
             are loaded directly from the MOIL backend.
           </p>
         </div>
-        <button
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-          onClick={() => onAdd(tab === "Reserves" ? "geology" : "production")}
-        >
-          <Plus size={16} /> Add Record
-        </button>
+        {tab !== "Risk Analysis" && (
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+            onClick={() => onAdd(tab === "Reserves" ? "geology" : "production")}
+          >
+            <Plus size={16} /> Add Record
+          </button>
+        )}
       </div>
 
       {showGeology ? (
@@ -822,9 +875,12 @@ function Module({ tab, mine, dash, onAdd }) {
           </div>
         </Card>
       ) : tab === "Risk Analysis" ? (
-        <Card title="Operational Risk Assessment">
-          <Risk p={prediction} />
-        </Card>
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+          <Card title="Operational Risk Assessment">
+            <Risk p={prediction} />
+          </Card>
+          <SavedLocation mine={mine} location={savedLocation} />
+        </div>
       ) : tab === "Production" ? (
         <Card title="Production Database">
           <div className="mt-3 overflow-auto rounded-xl border border-slate-200">
