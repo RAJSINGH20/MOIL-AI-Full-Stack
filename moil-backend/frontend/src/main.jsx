@@ -44,6 +44,35 @@ const API = configuredApiUrl.endsWith("/api")
 const api = axios.create({ baseURL: API });
 const mines = ["Dongri Buzurg", "Gumgaon", "Balaghat", "Tirodi"];
 
+// ===== NEW: Nearby Area Suggestion =====
+function calculateDistanceKm(from, to) {
+  const earthRadiusKm = 6371;
+  const latitudeDelta = ((to.latitude - from.latitude) * Math.PI) / 180;
+  const longitudeDelta = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const fromLatitude = (from.latitude * Math.PI) / 180;
+  const toLatitude = (to.latitude * Math.PI) / 180;
+  const value =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+// ===== NEW: Nearby Area Suggestion =====
+function mergeUniqueLocationAnalyses(existing, incoming) {
+  return [...incoming, ...existing]
+    .filter(
+      (item, index, all) =>
+        all.findIndex(
+          (candidate) =>
+            Number(candidate.latitude) === Number(item.latitude) &&
+            Number(candidate.longitude) === Number(item.longitude),
+        ) === index,
+    )
+    .slice(0, 12);
+}
+
 function App() {
   const [mine, setMine] = useState(mines[0]);
   const [tab, setTab] = useState("Overview");
@@ -54,6 +83,8 @@ function App() {
   const [locationAnalyses, setLocationAnalyses] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [nearbyCandidates, setNearbyCandidates] = useState([]);
+  const [nearbyAreas, setNearbyAreas] = useState([]);
+  const [showNearbyAreas, setShowNearbyAreas] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [savedLocation, setSavedLocation] = useState(null);
 
@@ -85,6 +116,8 @@ function App() {
     }
     setLocationAnalyses([]);
     setNearbyCandidates([]);
+    setNearbyAreas([]);
+    setShowNearbyAreas(false);
   }, [mine]);
 
   const run = async () => {
@@ -108,7 +141,9 @@ function App() {
         ...location,
       });
       setSelectedLocation(location);
-      setLocationAnalyses((items) => [r.data, ...items].slice(0, 12));
+      setLocationAnalyses((items) =>
+        mergeUniqueLocationAnalyses(items, [r.data]),
+      );
       if (saveLocation) {
         localStorage.setItem(
           `moil-mine-location:${mine}`,
@@ -129,6 +164,12 @@ function App() {
   };
 
   const suggestNearbyArea = async () => {
+    if (showNearbyAreas) {
+      setShowNearbyAreas(false);
+      return;
+    }
+
+    setLocationLoading(true);
     const source = selectedLocation || savedLocation;
     let origin = source && {
       latitude: Number(source.latitude),
@@ -164,20 +205,43 @@ function App() {
       { latitude: origin.latitude - offset, longitude: origin.longitude },
       { latitude: origin.latitude, longitude: origin.longitude - offset },
     ];
+    const candidateAreas = candidates.map((location, index) => ({
+      ...location,
+      id: `${location.latitude}-${location.longitude}`,
+      name: `Nearby Area ${index + 1}`,
+      distanceKm: calculateDistanceKm(origin, location),
+    }));
 
-    setLocationLoading(true);
+    setShowNearbyAreas(true);
     setSelectedLocation(origin);
-    setNearbyCandidates(candidates);
+    setNearbyCandidates(candidateAreas);
+    setNearbyAreas(candidateAreas);
     try {
       const results = [];
       let lastError;
-      for (const location of candidates) {
+      for (const area of candidateAreas) {
         try {
           const response = await api.post("/analytics/location-analysis", {
             mine,
-            ...location,
+            latitude: area.latitude,
+            longitude: area.longitude,
           });
-          results.push(response.data);
+          results.push({
+            ...response.data,
+            areaId: area.id,
+            areaName: area.name,
+          });
+          setNearbyAreas((items) =>
+            items.map((item) =>
+              item.id === area.id
+                ? {
+                    ...item,
+                    ...response.data,
+                    areaName: area.name,
+                  }
+                : item,
+            ),
+          );
         } catch (error) {
           lastError = error;
         }
@@ -185,7 +249,9 @@ function App() {
       if (!results.length) {
         throw lastError || new Error("No nearby areas could be analyzed.");
       }
-      setLocationAnalyses((items) => [...results, ...items].slice(0, 12));
+      setLocationAnalyses((items) =>
+        mergeUniqueLocationAnalyses(items, results),
+      );
       const best =
         results.find((result) => result.suitabilityStatus === "SUITABLE") ||
         results.find(
@@ -195,6 +261,7 @@ function App() {
       setSelectedLocation({
         latitude: Number(best.latitude),
         longitude: Number(best.longitude),
+        name: best.areaName || best.locationSummary || "Suggested area",
       });
       setMsg(
         best.suitabilityStatus === "SUITABLE"
@@ -206,6 +273,16 @@ function App() {
     } finally {
       setLocationLoading(false);
     }
+  };
+
+  const selectNearbyArea = (area) => {
+    setSelectedLocation({
+      latitude: Number(area.latitude),
+      longitude: Number(area.longitude),
+      name: area.areaName || area.name,
+    });
+    setShowNearbyAreas(true);
+    setMsg(`${area.areaName || area.name} selected on the map.`);
   };
 
   const analyzeMyLocation = () => {
@@ -390,11 +467,14 @@ function App() {
               environment={dash?.environmentPrediction}
               locationAnalyses={locationAnalyses}
               nearbyCandidates={nearbyCandidates}
+              nearbyAreas={nearbyAreas}
+              showNearbyAreas={showNearbyAreas}
               selectedLocation={selectedLocation}
               locationLoading={locationLoading}
               onSelectLocation={setSelectedLocation}
               onAnalyzeLocation={analyzeLocationPoint}
               onSuggestLocation={suggestNearbyArea}
+              onSelectNearbyArea={selectNearbyArea}
               onAdd={setShow}
             />
           ) : (
@@ -620,7 +700,13 @@ function InteractiveLocationMap({
         weight: 3,
         fillColor: "#059669",
         fillOpacity: 0.95,
-      }).addTo(overlays);
+      })
+        .bindTooltip(selectedLocation.name || "Selected area", {
+          permanent: true,
+          direction: "top",
+          offset: [0, -8],
+        })
+        .addTo(overlays);
     }
   }, [center, locationAnalyses, nearbyCandidates, selectedLocation]);
 
@@ -633,14 +719,66 @@ function InteractiveLocationMap({
   );
 }
 
+// ===== NEW: Nearby Area Suggestion =====
+function NearbyAreaList({ areas, selectedLocation, onSelectNearbyArea }) {
+  if (!areas.length) {
+    return (
+      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+        No nearby areas found.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2" aria-label="Nearby areas">
+      {areas.map((area, index) => {
+        const isSelected =
+          selectedLocation &&
+          Number(selectedLocation.latitude) === Number(area.latitude) &&
+          Number(selectedLocation.longitude) === Number(area.longitude);
+        const status = area.suitabilityStatus?.replaceAll("_", " ");
+        return (
+          <button
+            key={area.id || `${area.latitude}-${area.longitude}`}
+            type="button"
+            onClick={() => onSelectNearbyArea(area)}
+            className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${isSelected ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-300"}`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-800">
+                {area.areaName || area.name || `Nearby Area ${index + 1}`}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                {area.distanceKm.toFixed(1)} km
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+              <span>
+                {Number(area.latitude).toFixed(5)}, {" "}
+                {Number(area.longitude).toFixed(5)}
+              </span>
+              {status && (
+                <span className="font-bold text-emerald-700">{status}</span>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function LocationPicker({
   locationAnalyses = [],
   nearbyCandidates = [],
+  nearbyAreas = [],
+  showNearbyAreas,
   selectedLocation,
   locationLoading,
   onSelectLocation,
   onAnalyzeLocation,
   onSuggestLocation,
+  onSelectNearbyArea,
 }) {
   const center = selectedLocation
     ? [selectedLocation.latitude, selectedLocation.longitude]
@@ -679,12 +817,14 @@ function LocationPicker({
           Nearby candidate locations are shown in blue while AI checks them.
         </p>
       )}
-      {selectedLocation ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        {selectedLocation && (
           <div className="text-xs text-slate-500">
             Selected: {selectedLocation.latitude.toFixed(5)}, {" "}
             {selectedLocation.longitude.toFixed(5)}
           </div>
+        )}
+        {selectedLocation && (
           <button
             type="button"
             onClick={() => onAnalyzeLocation(selectedLocation)}
@@ -693,29 +833,26 @@ function LocationPicker({
           >
             {locationLoading ? "Analyzing..." : "Analyze Selected Area"}
           </button>
-          <button
-            type="button"
-            onClick={onSuggestLocation}
-            disabled={locationLoading}
-            className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {locationLoading ? "Comparing..." : "Suggest Nearby Area"}
-          </button>
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
-            No point selected. We can use your current location automatically.
-          </p>
-          <button
-            type="button"
-            onClick={onSuggestLocation}
-            disabled={locationLoading}
-            className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
-          >
-            {locationLoading ? "Finding area..." : "Suggest Nearby Area"}
-          </button>
-        </div>
+        )}
+        <button
+          type="button"
+          onClick={onSuggestLocation}
+          disabled={locationLoading}
+          className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {locationLoading
+            ? "Finding areas..."
+            : showNearbyAreas
+              ? "Hide Nearby Areas"
+              : "Suggest Nearby Area"}
+        </button>
+      </div>
+      {showNearbyAreas && (
+        <NearbyAreaList
+          areas={nearbyAreas}
+          selectedLocation={selectedLocation}
+          onSelectNearbyArea={onSelectNearbyArea}
+        />
       )}
     </Card>
   );
@@ -727,10 +864,13 @@ function Overview({
   environment = {},
   locationAnalyses = [],
   nearbyCandidates = [],
+  nearbyAreas = [],
+  showNearbyAreas = false,
   selectedLocation,
   locationLoading,
   onSelectLocation,
   onAnalyzeLocation,
+  onSelectNearbyArea,
   onAdd,
 }) {
   const latest = trend[trend.length - 1] || {};
@@ -886,10 +1026,13 @@ function Overview({
         <LocationPicker
           locationAnalyses={locationAnalyses}
           nearbyCandidates={nearbyCandidates}
+          nearbyAreas={nearbyAreas}
+          showNearbyAreas={showNearbyAreas}
           selectedLocation={selectedLocation}
           locationLoading={locationLoading}
           onSelectLocation={onSelectLocation}
           onAnalyzeLocation={onAnalyzeLocation}
+          onSelectNearbyArea={onSelectNearbyArea}
         />
         <Card title="Analyzed Areas">
           {locationAnalyses.length ? (
