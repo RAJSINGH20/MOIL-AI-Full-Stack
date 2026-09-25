@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
+import { CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   Activity,
   AlertTriangle,
@@ -49,7 +51,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [show, setShow] = useState(null);
-  const [locationAnalysis, setLocationAnalysis] = useState(null);
+  const [locationAnalyses, setLocationAnalyses] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [savedLocation, setSavedLocation] = useState(null);
 
@@ -72,11 +75,14 @@ function App() {
     load();
     const storedLocation = localStorage.getItem(`moil-mine-location:${mine}`);
     try {
-      setSavedLocation(storedLocation ? JSON.parse(storedLocation) : null);
+      const location = storedLocation ? JSON.parse(storedLocation) : null;
+      setSavedLocation(location);
+      setSelectedLocation(location);
     } catch {
       setSavedLocation(null);
+      setSelectedLocation(null);
     }
-    setLocationAnalysis(null);
+    setLocationAnalyses([]);
   }, [mine]);
 
   const run = async () => {
@@ -92,27 +98,43 @@ function App() {
     }
   };
 
+  const analyzeLocationPoint = async (location, saveLocation = false) => {
+    setLocationLoading(true);
+    try {
+      const r = await api.post("/analytics/location-analysis", {
+        mine,
+        ...location,
+      });
+      setSelectedLocation(location);
+      setLocationAnalyses((items) => [r.data, ...items].slice(0, 12));
+      if (saveLocation) {
+        localStorage.setItem(
+          `moil-mine-location:${mine}`,
+          JSON.stringify(location),
+        );
+        setSavedLocation(location);
+      }
+      setMsg(
+        saveLocation
+          ? "Your location was analyzed and saved. Select another point to compare areas."
+          : "Selected area analyzed. Choose another point for a separate AI assessment.",
+      );
+    } catch (e) {
+      setMsg(e.response?.data?.message || "Location analysis failed.");
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
   const analyzeMyLocation = () => {
     const savedLocationKey = `moil-mine-location:${mine}`;
     const savedLocation = localStorage.getItem(savedLocationKey);
-
     setLocationLoading(true);
 
     if (savedLocation) {
       try {
         const { latitude, longitude } = JSON.parse(savedLocation);
-        api
-          .post("/analytics/location-analysis", { mine, latitude, longitude })
-          .then((r) => {
-            setLocationAnalysis(r.data);
-            setMsg("Risk analysis completed using the saved mine location.");
-          })
-          .catch((e) => {
-            setMsg(
-              e.response?.data?.message || "Live location analysis failed.",
-            );
-          })
-          .finally(() => setLocationLoading(false));
+        analyzeLocationPoint({ latitude, longitude });
         return;
       } catch {
         localStorage.removeItem(savedLocationKey);
@@ -120,7 +142,6 @@ function App() {
     }
 
     if (!navigator.geolocation) {
-      setLocationLoading(false);
       setMsg("Live location is not supported by this browser.");
       return;
     }
@@ -135,16 +156,9 @@ function App() {
           };
           localStorage.setItem(savedLocationKey, JSON.stringify(location));
           setSavedLocation(location);
-          const r = await api.post("/analytics/location-analysis", {
-            mine,
-            ...location,
-          });
-          setLocationAnalysis(r.data);
-          setMsg("Risk analysis completed and this mine location was saved.");
+          await analyzeLocationPoint(location, true);
         } catch (e) {
           setMsg(e.response?.data?.message || "Live location analysis failed.");
-        } finally {
-          setLocationLoading(false);
         }
       },
       (error) => {
@@ -292,7 +306,11 @@ function App() {
               p={p}
               trend={trend}
               environment={dash?.environmentPrediction}
-              locationAnalysis={locationAnalysis}
+              locationAnalyses={locationAnalyses}
+              selectedLocation={selectedLocation}
+              locationLoading={locationLoading}
+              onSelectLocation={setSelectedLocation}
+              onAnalyzeLocation={analyzeLocationPoint}
               onAdd={setShow}
             />
           ) : (
@@ -442,7 +460,93 @@ function MineAssistant({ mine, dashboard }) {
   );
 }
 
-function Overview({ p, trend, environment = {}, locationAnalysis, onAdd }) {
+function MapClickHandler({ onSelect }) {
+  useMapEvents({
+    click(event) {
+      onSelect({
+        latitude: Number(event.latlng.lat.toFixed(6)),
+        longitude: Number(event.latlng.lng.toFixed(6)),
+      });
+    },
+  });
+  return null;
+}
+
+function LocationPicker({
+  selectedLocation,
+  locationLoading,
+  onSelectLocation,
+  onAnalyzeLocation,
+}) {
+  const center = selectedLocation
+    ? [selectedLocation.latitude, selectedLocation.longitude]
+    : [21.3, 79.1];
+
+  return (
+    <Card title="Check Another Area">
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        Click any point on the satellite map, then run a separate mining
+        suitability check for that area.
+      </p>
+      <MapContainer
+        center={center}
+        zoom={selectedLocation ? 13 : 6}
+        scrollWheelZoom
+        className="mt-3 h-72 w-full rounded-xl border border-slate-200 sm:h-80"
+      >
+        <TileLayer
+          attribution='&copy; Esri, Maxar, Earthstar Geographics'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        />
+        <MapClickHandler onSelect={onSelectLocation} />
+        {selectedLocation && (
+          <CircleMarker
+            center={[selectedLocation.latitude, selectedLocation.longitude]}
+            radius={9}
+            pathOptions={{
+              color: "#f8fafc",
+              weight: 3,
+              fillColor: "#059669",
+              fillOpacity: 0.95,
+            }}
+          />
+        )}
+      </MapContainer>
+      {selectedLocation ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-slate-500">
+            Selected: {selectedLocation.latitude.toFixed(5)}, {" "}
+            {selectedLocation.longitude.toFixed(5)}
+          </div>
+          <button
+            type="button"
+            onClick={() => onAnalyzeLocation(selectedLocation)}
+            disabled={locationLoading}
+            className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
+          >
+            {locationLoading ? "Analyzing..." : "Analyze Selected Area"}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">
+          No point selected. Zoom and click the map to place a pointer.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function Overview({
+  p,
+  trend,
+  environment = {},
+  locationAnalyses,
+  selectedLocation,
+  locationLoading,
+  onSelectLocation,
+  onAnalyzeLocation,
+  onAdd,
+}) {
   const latest = trend[trend.length - 1] || {};
   const weather = {
     rainfallMm: environment.rainfallMm ?? latest.rainfallMm,
@@ -530,7 +634,7 @@ function Overview({ p, trend, environment = {}, locationAnalysis, onAdd }) {
       </section>
 
       <section className="mt-6 grid gap-4 motion-safe:animate-rise-in [animation-delay:240ms] xl:grid-cols-3">
-        {locationAnalysis && <LocationAnalysis result={locationAnalysis} />}
+        {locationAnalyses[0] && <LocationAnalysis result={locationAnalyses[0]} />}
         <Card title="Satellite / Weather">
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Metric
@@ -589,6 +693,52 @@ function Overview({ p, trend, environment = {}, locationAnalysis, onAdd }) {
 
         <Card title="AI Actions">
           <Risk p={p} />
+        </Card>
+      </section>
+
+      <section className="mt-6 grid gap-4 motion-safe:animate-rise-in [animation-delay:320ms] xl:grid-cols-[1.2fr_0.8fr]">
+        <LocationPicker
+          selectedLocation={selectedLocation}
+          locationLoading={locationLoading}
+          onSelectLocation={onSelectLocation}
+          onAnalyzeLocation={onAnalyzeLocation}
+        />
+        <Card title="Analyzed Areas">
+          {locationAnalyses.length ? (
+            <div className="mt-3 space-y-2">
+              {locationAnalyses.map((analysis, index) => (
+                <button
+                  key={`${analysis.latitude}-${analysis.longitude}-${index}`}
+                  type="button"
+                  onClick={() =>
+                    onSelectLocation({
+                      latitude: Number(analysis.latitude),
+                      longitude: Number(analysis.longitude),
+                    })
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-emerald-300"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-slate-700">
+                      Area {locationAnalyses.length - index}
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-700">
+                      {analysis.suitabilityStatus.replaceAll("_", " ")}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {Number(analysis.latitude).toFixed(5)}, {" "}
+                    {Number(analysis.longitude).toFixed(5)} · {analysis.riskLevel} risk
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              Your area checks will appear here so you can compare different
+              points around the mine.
+            </p>
+          )}
         </Card>
       </section>
     </>
