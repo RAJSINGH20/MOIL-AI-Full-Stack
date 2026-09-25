@@ -134,8 +134,16 @@ function App() {
   };
 
   const suggestNearbyArea = async () => {
-    const origin = selectedLocation || savedLocation;
-    if (!origin) {
+    const source = selectedLocation || savedLocation;
+    const origin = source && {
+      latitude: Number(source.latitude),
+      longitude: Number(source.longitude),
+    };
+    if (
+      !origin ||
+      !Number.isFinite(origin.latitude) ||
+      !Number.isFinite(origin.longitude)
+    ) {
       setMsg("Select a map point first so nearby areas can be compared.");
       return;
     }
@@ -150,13 +158,22 @@ function App() {
 
     setLocationLoading(true);
     try {
-      const results = await Promise.all(
-        candidates.map((location) =>
-          api
-            .post("/analytics/location-analysis", { mine, ...location })
-            .then((response) => response.data),
-        ),
-      );
+      const results = [];
+      let lastError;
+      for (const location of candidates) {
+        try {
+          const response = await api.post("/analytics/location-analysis", {
+            mine,
+            ...location,
+          });
+          results.push(response.data);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (!results.length) {
+        throw lastError || new Error("No nearby areas could be analyzed.");
+      }
       setLocationAnalyses((items) => [...results, ...items].slice(0, 12));
       const best =
         results.find((result) => result.suitabilityStatus === "SUITABLE") ||
