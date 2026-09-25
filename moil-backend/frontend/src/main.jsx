@@ -6,11 +6,9 @@ import {
   AlertTriangle,
   BarChart3,
   Database,
-  Map,
   Mountain,
   RefreshCw,
   Sparkles,
-  Truck,
   CloudRain,
   Droplets,
   Thermometer,
@@ -174,8 +172,6 @@ function App() {
               ["Reserves", Mountain],
               ["Production", BarChart3],
               ["Risk Analysis", AlertTriangle],
-              ["Geospatial", Map],
-              ["Equipment", Truck],
             ].map(([name, Icon], index) => (
               <button
                 key={name}
@@ -260,7 +256,12 @@ function App() {
               onAdd={setShow}
             />
           ) : (
-            <Module tab={tab} mine={mine} dash={dash} onAdd={setShow} />
+            <Module
+              tab={tab}
+              mine={mine}
+              dash={dash}
+              onAdd={setShow}
+            />
           )}
 
           <footer className="mt-6 text-xs text-slate-500">
@@ -721,7 +722,8 @@ function Metric({ I, n, v }) {
 function Module({ tab, mine, dash, onAdd }) {
   const rows = dash?.productionTrend || [];
   const geology = dash?.geologicalData || [];
-  const showGeology = ["Reserves", "Geospatial"].includes(tab);
+  const prediction = dash?.latestPrediction || {};
+  const showGeology = tab === "Reserves";
 
   return (
     <div className="space-y-4 motion-safe:animate-rise-in">
@@ -788,9 +790,11 @@ function Module({ tab, mine, dash, onAdd }) {
             </table>
           </div>
         </Card>
-      ) : tab === "Production" ||
-        tab === "Equipment" ||
-        tab === "Risk Analysis" ? (
+      ) : tab === "Risk Analysis" ? (
+        <Card title="Operational Risk Assessment">
+          <Risk p={prediction} />
+        </Card>
+      ) : tab === "Production" ? (
         <Card title="Production Database">
           <div className="mt-3 overflow-auto rounded-xl border border-slate-200">
             <table className="min-w-full border-collapse text-left text-sm">
