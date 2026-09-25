@@ -61,6 +61,7 @@ function App() {
   const [show, setShow] = useState(null);
   const [locationAnalyses, setLocationAnalyses] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [nearbyCandidates, setNearbyCandidates] = useState([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const [savedLocation, setSavedLocation] = useState(null);
 
@@ -91,6 +92,7 @@ function App() {
       setSelectedLocation(null);
     }
     setLocationAnalyses([]);
+    setNearbyCandidates([]);
   }, [mine]);
 
   const run = async () => {
@@ -173,6 +175,7 @@ function App() {
 
     setLocationLoading(true);
     setSelectedLocation(origin);
+    setNearbyCandidates(candidates);
     try {
       const results = [];
       let lastError;
@@ -394,6 +397,7 @@ function App() {
               trend={trend}
               environment={dash?.environmentPrediction}
               locationAnalyses={locationAnalyses}
+              nearbyCandidates={nearbyCandidates}
               selectedLocation={selectedLocation}
               locationLoading={locationLoading}
               onSelectLocation={setSelectedLocation}
@@ -572,6 +576,7 @@ function MapViewport({ center, zoom }) {
 
 function LocationPicker({
   locationAnalyses,
+  nearbyCandidates,
   selectedLocation,
   locationLoading,
   onSelectLocation,
@@ -600,6 +605,21 @@ function LocationPicker({
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
         <MapClickHandler onSelect={onSelectLocation} />
+        {nearbyCandidates.map((candidate, index) => (
+          <CircleMarker
+            key={`candidate-${candidate.latitude}-${candidate.longitude}`}
+            center={[candidate.latitude, candidate.longitude]}
+            radius={7}
+            pathOptions={{
+              color: "#f8fafc",
+              weight: 2,
+              fillColor: "#2563eb",
+              fillOpacity: 0.95,
+            }}
+          >
+            <Popup>Nearby candidate area {index + 1}</Popup>
+          </CircleMarker>
+        ))}
         {locationAnalyses.map((analysis, index) => {
           const areaStyle =
             analysis.suitabilityStatus === "SUITABLE"
@@ -664,6 +684,11 @@ function LocationPicker({
         Shaded circles are AI screening areas around checked points, not legal
         mining boundaries or survey results.
       </p>
+      {nearbyCandidates.length > 0 && locationLoading && (
+        <p className="mt-2 text-xs font-medium text-blue-700">
+          Nearby candidate locations are shown in blue while AI checks them.
+        </p>
+      )}
       {selectedLocation ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-slate-500">
