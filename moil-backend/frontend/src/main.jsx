@@ -133,6 +133,53 @@ function App() {
     }
   };
 
+  const suggestNearbyArea = async () => {
+    const origin = selectedLocation || savedLocation;
+    if (!origin) {
+      setMsg("Select a map point first so nearby areas can be compared.");
+      return;
+    }
+
+    const offset = 0.005;
+    const candidates = [
+      { latitude: origin.latitude + offset, longitude: origin.longitude },
+      { latitude: origin.latitude, longitude: origin.longitude + offset },
+      { latitude: origin.latitude - offset, longitude: origin.longitude },
+      { latitude: origin.latitude, longitude: origin.longitude - offset },
+    ];
+
+    setLocationLoading(true);
+    try {
+      const results = await Promise.all(
+        candidates.map((location) =>
+          api
+            .post("/analytics/location-analysis", { mine, ...location })
+            .then((response) => response.data),
+        ),
+      );
+      setLocationAnalyses((items) => [...results, ...items].slice(0, 12));
+      const best =
+        results.find((result) => result.suitabilityStatus === "SUITABLE") ||
+        results.find(
+          (result) => result.suitabilityStatus === "SUITABLE_WITH_REVIEW",
+        ) ||
+        results[0];
+      setSelectedLocation({
+        latitude: Number(best.latitude),
+        longitude: Number(best.longitude),
+      });
+      setMsg(
+        best.suitabilityStatus === "SUITABLE"
+          ? "A nearby suitable area was suggested and selected on the map."
+          : "No nearby area was marked fully suitable; the closest review area was selected.",
+      );
+    } catch (e) {
+      setMsg(e.response?.data?.message || "Unable to suggest a nearby area.");
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
   const analyzeMyLocation = () => {
     const savedLocationKey = `moil-mine-location:${mine}`;
     const savedLocation = localStorage.getItem(savedLocationKey);
@@ -318,6 +365,7 @@ function App() {
               locationLoading={locationLoading}
               onSelectLocation={setSelectedLocation}
               onAnalyzeLocation={analyzeLocationPoint}
+              onSuggestLocation={suggestNearbyArea}
               onAdd={setShow}
             />
           ) : (
@@ -485,6 +533,7 @@ function LocationPicker({
   locationLoading,
   onSelectLocation,
   onAnalyzeLocation,
+  onSuggestLocation,
 }) {
   const center = selectedLocation
     ? [selectedLocation.latitude, selectedLocation.longitude]
@@ -584,6 +633,14 @@ function LocationPicker({
             className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
             {locationLoading ? "Analyzing..." : "Analyze Selected Area"}
+          </button>
+          <button
+            type="button"
+            onClick={onSuggestLocation}
+            disabled={locationLoading}
+            className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {locationLoading ? "Comparing..." : "Suggest Nearby Area"}
           </button>
         </div>
       ) : (
