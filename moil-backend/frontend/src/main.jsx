@@ -598,8 +598,8 @@ function Overview({ p, trend, environment = {}, locationAnalysis, onAdd }) {
 function LocationAnalysis({ result }) {
   const latitude = Number(result.latitude);
   const longitude = Number(result.longitude);
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.02}%2C${latitude - 0.02}%2C${longitude + 0.02}%2C${latitude + 0.02}&layer=mapnik&marker=${latitude}%2C${longitude}`;
-  const fullMapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=14/${latitude}/${longitude}`;
+  const mapUrl = `https://maps.google.com/maps?q=${latitude},${longitude}&t=k&z=14&output=embed`;
+  const fullMapUrl = `https://www.google.com/maps/@${latitude},${longitude},14z/data=!3m1!1e3`;
   const riskClass =
     result.riskLevel === "HIGH"
       ? "bg-red-100 text-red-700"
@@ -631,7 +631,7 @@ function LocationAnalysis({ result }) {
       <iframe
         title="Live location map"
         src={mapUrl}
-        className="mt-3 h-44 w-full rounded-xl border border-slate-200 shadow-map-frame transition duration-300 hover:scale-[1.01] hover:shadow-map-frame-hover"
+        className="mt-3 h-72 w-full rounded-xl border border-slate-200 shadow-map-frame transition duration-300 hover:scale-[1.01] hover:shadow-map-frame-hover sm:h-80"
         loading="lazy"
       />
       <a
@@ -701,8 +701,8 @@ function SavedLocation({ mine, location }) {
 
   const latitude = Number(location.latitude);
   const longitude = Number(location.longitude);
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.02}%2C${latitude - 0.02}%2C${longitude + 0.02}%2C${latitude + 0.02}&layer=mapnik&marker=${latitude}%2C${longitude}`;
-  const fullMapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=14/${latitude}/${longitude}`;
+  const mapUrl = `https://maps.google.com/maps?q=${latitude},${longitude}&t=k&z=14&output=embed`;
+  const fullMapUrl = `https://www.google.com/maps/@${latitude},${longitude},14z/data=!3m1!1e3`;
 
   return (
     <Card title="Mine Location">
@@ -713,7 +713,7 @@ function SavedLocation({ mine, location }) {
       <iframe
         title={`${mine} saved location map`}
         src={mapUrl}
-        className="mt-3 h-52 w-full rounded-xl border border-slate-200"
+        className="mt-3 h-72 w-full rounded-xl border border-slate-200 sm:h-80"
         loading="lazy"
       />
       <a
