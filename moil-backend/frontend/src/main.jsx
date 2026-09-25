@@ -7,6 +7,7 @@ import {
   MapContainer,
   Popup,
   TileLayer,
+  useMap,
   useMapEvents,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -135,7 +136,7 @@ function App() {
 
   const suggestNearbyArea = async () => {
     const source = selectedLocation || savedLocation;
-    const origin = source && {
+    let origin = source && {
       latitude: Number(source.latitude),
       longitude: Number(source.longitude),
     };
@@ -144,8 +145,22 @@ function App() {
       !Number.isFinite(origin.latitude) ||
       !Number.isFinite(origin.longitude)
     ) {
-      setMsg("Select a map point first so nearby areas can be compared.");
-      return;
+      const fallback = { latitude: 21.3, longitude: 79.1 };
+      origin = await new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(fallback);
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          ({ coords }) =>
+            resolve({
+              latitude: Number(coords.latitude.toFixed(6)),
+              longitude: Number(coords.longitude.toFixed(6)),
+            }),
+          () => resolve(fallback),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+        );
+      });
     }
 
     const offset = 0.005;
@@ -157,6 +172,7 @@ function App() {
     ];
 
     setLocationLoading(true);
+    setSelectedLocation(origin);
     try {
       const results = [];
       let lastError;
@@ -544,6 +560,16 @@ function MapClickHandler({ onSelect }) {
   return null;
 }
 
+function MapViewport({ center, zoom }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, map, zoom]);
+
+  return null;
+}
+
 function LocationPicker({
   locationAnalyses,
   selectedLocation,
@@ -568,6 +594,7 @@ function LocationPicker({
         scrollWheelZoom
         className="mt-3 h-72 w-full rounded-xl border border-slate-200 sm:h-80"
       >
+        <MapViewport center={center} zoom={selectedLocation ? 13 : 6} />
         <TileLayer
           attribution='&copy; Esri, Maxar, Earthstar Geographics'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -661,9 +688,19 @@ function LocationPicker({
           </button>
         </div>
       ) : (
-        <p className="mt-3 text-xs text-slate-500">
-          No point selected. Zoom and click the map to place a pointer.
-        </p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">
+            No point selected. We can use your current location automatically.
+          </p>
+          <button
+            type="button"
+            onClick={onSuggestLocation}
+            disabled={locationLoading}
+            className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
+          >
+            {locationLoading ? "Finding area..." : "Suggest Nearby Area"}
+          </button>
+        </div>
       )}
     </Card>
   );
