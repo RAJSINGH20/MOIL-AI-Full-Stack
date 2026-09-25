@@ -198,7 +198,7 @@ function App() {
       });
     }
 
-    const offset = 0.005;
+    const offset = 0.012;
     const candidates = [
       { latitude: origin.latitude + offset, longitude: origin.longitude },
       { latitude: origin.latitude, longitude: origin.longitude + offset },
@@ -687,6 +687,10 @@ function InteractiveLocationMap({
         radius: analysis.suitabilityStatus === "SUITABLE" ? 700 : 500,
         ...areaStyle,
       })
+        .bindTooltip(
+          `${analysis.areaName || analysis.locationSummary || "Checked area"}: ${analysis.suitabilityStatus.replaceAll("_", " ")}`,
+          { permanent: true, direction: "top", offset: [0, -8] },
+        )
         .bindPopup(
           `<strong>Area ${locationAnalyses.length - index}</strong><br>${analysis.suitabilityStatus.replaceAll("_", " ")}<br>${analysis.suitabilityReason}`,
         )
