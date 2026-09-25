@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
-import { CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import {
+  Circle,
+  CircleMarker,
+  MapContainer,
+  Popup,
+  TileLayer,
+  useMapEvents,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   Activity,
@@ -473,6 +480,7 @@ function MapClickHandler({ onSelect }) {
 }
 
 function LocationPicker({
+  locationAnalyses,
   selectedLocation,
   locationLoading,
   onSelectLocation,
@@ -499,6 +507,42 @@ function LocationPicker({
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
         <MapClickHandler onSelect={onSelectLocation} />
+        {locationAnalyses.map((analysis, index) => {
+          const areaStyle =
+            analysis.suitabilityStatus === "SUITABLE"
+              ? {
+                  color: "#047857",
+                  fillColor: "#10b981",
+                  fillOpacity: 0.28,
+                }
+              : analysis.suitabilityStatus === "NOT_SUITABLE"
+                ? {
+                    color: "#b91c1c",
+                    fillColor: "#ef4444",
+                    fillOpacity: 0.24,
+                  }
+                : {
+                    color: "#b45309",
+                    fillColor: "#f59e0b",
+                    fillOpacity: 0.26,
+                  };
+          return (
+            <Circle
+              key={`${analysis.latitude}-${analysis.longitude}-${index}`}
+              center={[analysis.latitude, analysis.longitude]}
+              radius={analysis.suitabilityStatus === "SUITABLE" ? 700 : 500}
+              pathOptions={areaStyle}
+            >
+              <Popup>
+                <strong>Area {locationAnalyses.length - index}</strong>
+                <br />
+                {analysis.suitabilityStatus.replaceAll("_", " ")}
+                <br />
+                {analysis.suitabilityReason}
+              </Popup>
+            </Circle>
+          );
+        })}
         {selectedLocation && (
           <CircleMarker
             center={[selectedLocation.latitude, selectedLocation.longitude]}
@@ -512,6 +556,21 @@ function LocationPicker({
           />
         )}
       </MapContainer>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Suitable area
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Review area
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Not suitable
+        </span>
+      </div>
+      <p className="mt-2 text-[11px] leading-5 text-slate-500">
+        Shaded circles are AI screening areas around checked points, not legal
+        mining boundaries or survey results.
+      </p>
       {selectedLocation ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-slate-500">
@@ -698,6 +757,7 @@ function Overview({
 
       <section className="mt-6 grid gap-4 motion-safe:animate-rise-in [animation-delay:320ms] xl:grid-cols-[1.2fr_0.8fr]">
         <LocationPicker
+          locationAnalyses={locationAnalyses}
           selectedLocation={selectedLocation}
           locationLoading={locationLoading}
           onSelectLocation={onSelectLocation}
