@@ -634,8 +634,8 @@ function InteractiveLocationMap({
 }
 
 function LocationPicker({
-  locationAnalyses,
-  nearbyCandidates,
+  locationAnalyses = [],
+  nearbyCandidates = [],
   selectedLocation,
   locationLoading,
   onSelectLocation,
@@ -725,7 +725,8 @@ function Overview({
   p,
   trend,
   environment = {},
-  locationAnalyses,
+  locationAnalyses = [],
+  nearbyCandidates = [],
   selectedLocation,
   locationLoading,
   onSelectLocation,
@@ -884,6 +885,7 @@ function Overview({
       <section className="mt-6 grid gap-4 motion-safe:animate-rise-in [animation-delay:320ms] xl:grid-cols-[1.2fr_0.8fr]">
         <LocationPicker
           locationAnalyses={locationAnalyses}
+          nearbyCandidates={nearbyCandidates}
           selectedLocation={selectedLocation}
           locationLoading={locationLoading}
           onSelectLocation={onSelectLocation}
