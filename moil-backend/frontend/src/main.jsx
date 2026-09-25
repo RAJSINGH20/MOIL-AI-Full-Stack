@@ -171,49 +171,33 @@ function App() {
 
     setLocationLoading(true);
     const source = selectedLocation || savedLocation;
-    let origin = source && {
+    const origin = source && {
       latitude: Number(source.latitude),
       longitude: Number(source.longitude),
     };
-    if (
-      !origin ||
-      !Number.isFinite(origin.latitude) ||
-      !Number.isFinite(origin.longitude)
-    ) {
-      const fallback = { latitude: 21.3, longitude: 79.1 };
-      origin = await new Promise((resolve) => {
-        if (!navigator.geolocation) {
-          resolve(fallback);
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          ({ coords }) =>
-            resolve({
-              latitude: Number(coords.latitude.toFixed(6)),
-              longitude: Number(coords.longitude.toFixed(6)),
-            }),
-          () => resolve(fallback),
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
-        );
-      });
-    }
+    const mapOrigin =
+      origin &&
+      Number.isFinite(origin.latitude) &&
+      Number.isFinite(origin.longitude)
+        ? origin
+        : { latitude: 21.3, longitude: 79.1 };
 
     const offset = 0.012;
     const candidates = [
-      { latitude: origin.latitude + offset, longitude: origin.longitude },
-      { latitude: origin.latitude, longitude: origin.longitude + offset },
-      { latitude: origin.latitude - offset, longitude: origin.longitude },
-      { latitude: origin.latitude, longitude: origin.longitude - offset },
+      { latitude: mapOrigin.latitude + offset, longitude: mapOrigin.longitude },
+      { latitude: mapOrigin.latitude, longitude: mapOrigin.longitude + offset },
+      { latitude: mapOrigin.latitude - offset, longitude: mapOrigin.longitude },
+      { latitude: mapOrigin.latitude, longitude: mapOrigin.longitude - offset },
     ];
     const candidateAreas = candidates.map((location, index) => ({
       ...location,
       id: `${location.latitude}-${location.longitude}`,
       name: `Nearby Area ${index + 1}`,
-      distanceKm: calculateDistanceKm(origin, location),
+      distanceKm: calculateDistanceKm(mapOrigin, location),
     }));
 
     setShowNearbyAreas(true);
-    setSelectedLocation(origin);
+    setSelectedLocation(mapOrigin);
     setNearbyCandidates(candidateAreas);
     setNearbyAreas(candidateAreas);
     try {
