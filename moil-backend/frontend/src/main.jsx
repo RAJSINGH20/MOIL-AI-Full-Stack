@@ -34,7 +34,7 @@ import {
 } from "recharts";
 import "./styles.css";
 
-const configuredApiUrl = (
+const configuredApiUrl = (  
   import.meta.env.VITE_API_URL ||
   "https://moil-ai-full-stack-1.onrender.com/api"
 ).replace(/\/+$/, "");
@@ -71,6 +71,24 @@ function mergeUniqueLocationAnalyses(existing, incoming) {
         ) === index,
     )
     .slice(0, 12);
+}
+
+function rankNearbyAreas(areas) {
+  const statusRank = {
+    SUITABLE: 0,
+    SUITABLE_WITH_REVIEW: 1,
+  };
+  const riskRank = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+
+  return areas
+    .filter((area) => statusRank[area.suitabilityStatus] !== undefined)
+    .sort(
+      (a, b) =>
+        statusRank[a.suitabilityStatus] - statusRank[b.suitabilityStatus] ||
+        (riskRank[a.riskLevel] ?? 1) - (riskRank[b.riskLevel] ?? 1) ||
+        a.distanceKm - b.distanceKm,
+    )
+    .slice(0, 3);
 }
 
 function App() {
@@ -199,7 +217,7 @@ function App() {
     setShowNearbyAreas(true);
     setSelectedLocation(mapOrigin);
     setNearbyCandidates(candidateAreas);
-    setNearbyAreas(candidateAreas);
+    setNearbyAreas([]);
     try {
       const results = [];
       let lastError;
@@ -214,6 +232,7 @@ function App() {
             ...response.data,
             areaId: area.id,
             areaName: area.name,
+            distanceKm: area.distanceKm,
           });
           setNearbyAreas((items) =>
             items.map((item) =>
@@ -233,25 +252,22 @@ function App() {
       if (!results.length) {
         throw lastError || new Error("No nearby areas could be analyzed.");
       }
+      const suggestions = rankNearbyAreas(results);
+      setNearbyAreas(suggestions);
       setLocationAnalyses((items) =>
         mergeUniqueLocationAnalyses(items, results),
       );
-      const best =
-        results.find((result) => result.suitabilityStatus === "SUITABLE") ||
-        results.find(
-          (result) => result.suitabilityStatus === "SUITABLE_WITH_REVIEW",
-        ) ||
-        results[0];
-      setSelectedLocation({
-        latitude: Number(best.latitude),
-        longitude: Number(best.longitude),
-        name: best.areaName || best.locationSummary || "Suggested area",
-      });
-      setMsg(
-        best.suitabilityStatus === "SUITABLE"
-          ? "A nearby suitable area was suggested and selected on the map."
-          : "No nearby area was marked fully suitable; the closest review area was selected.",
-      );
+      const best = suggestions[0];
+      if (best) {
+        setSelectedLocation({
+          latitude: Number(best.latitude),
+          longitude: Number(best.longitude),
+          name: best.areaName || best.locationSummary || "Suggested area",
+        });
+        setMsg("Top nearby areas are ready to review and compare.");
+      } else {
+        setMsg("No suitable nearby areas were found in this screening.");
+      }
     } catch (e) {
       setMsg(e.response?.data?.message || "Unable to suggest a nearby area.");
     } finally {
@@ -712,13 +728,21 @@ function NearbyAreaList({ areas, selectedLocation, onSelectNearbyArea }) {
   if (!areas.length) {
     return (
       <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-        No nearby areas found.
+        No suitable nearby areas were found in this screening. Try a different
+        search center or confirm options with a qualified field survey.
       </div>
     );
   }
 
   return (
-    <div className="mt-3 space-y-2" aria-label="Nearby areas">
+    <div className="mt-3 space-y-2" aria-label="Top suitable nearby areas">
+      <div className="text-xs font-semibold text-slate-700">
+        Top {areas.length} areas to explore
+      </div>
+      <p className="text-xs leading-5 text-slate-500">
+        Preliminary AI screening only. Confirm suitability with a qualified
+        field survey before exploration.
+      </p>
       {areas.map((area, index) => {
         const isSelected =
           selectedLocation &&
