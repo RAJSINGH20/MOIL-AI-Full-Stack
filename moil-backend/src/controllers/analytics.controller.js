@@ -60,7 +60,7 @@ export async function dashboard(req, res) {
 
 export async function chat(req, res) {
   try {
-    const { mine, question, dashboard } = req.body;
+    const { mine, question, history, dashboard } = req.body;
     if (!mine || !question?.trim())
       return res
         .status(400)
@@ -68,6 +68,7 @@ export async function chat(req, res) {
     const answer = await askMineAssistant({
       mine,
       question: question.trim(),
+      history,
       dashboard,
     });
     res.json({ answer });

@@ -516,6 +516,20 @@ function MineAssistant({ mine, dashboard }) {
     },
   ]);
   const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    setMessages([
+      {
+        role: "assistant",
+        text: "Ask me about risk, production, reserves, or mine conditions.",
+      },
+    ]);
+  }, [mine]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
 
   const send = async (e) => {
     e.preventDefault();
@@ -528,6 +542,10 @@ function MineAssistant({ mine, dashboard }) {
       const response = await api.post("/analytics/chat", {
         mine,
         question: text,
+        history: messages.map(({ role, text: messageText }) => ({
+          role,
+          content: messageText,
+        })),
         dashboard,
       });
       setMessages((items) => [
@@ -587,6 +605,7 @@ function MineAssistant({ mine, dashboard }) {
                 MOIL AI is thinking...
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
           <form
             onSubmit={send}
