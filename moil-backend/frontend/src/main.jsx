@@ -465,6 +465,7 @@ function App() {
               p={p}
               trend={trend}
               environment={dash?.environmentPrediction}
+              geologicalData={dash?.geologicalData || []}
               locationAnalyses={locationAnalyses}
               nearbyCandidates={nearbyCandidates}
               nearbyAreas={nearbyAreas}
@@ -937,6 +938,7 @@ function Overview({
   p,
   trend,
   environment = {},
+  geologicalData = [],
   locationAnalyses = [],
   nearbyCandidates = [],
   nearbyAreas = [],
@@ -1099,6 +1101,7 @@ function Overview({
 
       <section className="mt-6 grid gap-4 motion-safe:animate-rise-in [animation-delay:320ms] xl:grid-cols-[1.2fr_0.8fr]">
         <LocationPicker
+          geologicalData={geologicalData}
           locationAnalyses={locationAnalyses}
           nearbyCandidates={nearbyCandidates}
           nearbyAreas={nearbyAreas}
