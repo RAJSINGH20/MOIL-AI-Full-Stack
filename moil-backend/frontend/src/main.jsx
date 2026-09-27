@@ -646,6 +646,7 @@ function MineAssistant({ mine, dashboard }) {
 function InteractiveLocationMap({
   center,
   selectedLocation,
+  geologicalData,
   nearbyCandidates,
   locationAnalyses,
   onSelectLocation,
@@ -682,6 +683,36 @@ function InteractiveLocationMap({
 
     map.setView(center, selectedLocation ? 13 : 6);
     overlays.clearLayers();
+
+    geologicalData
+      .filter(
+        (record) =>
+          Number.isFinite(Number(record.latitude)) &&
+          Number.isFinite(Number(record.longitude)),
+      )
+      .forEach((record) => {
+        const grade = Number(record.manganeseGrade) || 0;
+        const thickness = Number(record.oreThickness) || 0;
+        const strongPotential = grade >= 30 && thickness >= 2;
+        const hasPotential = grade >= 20 || thickness >= 1;
+        const color = strongPotential
+          ? { color: "#047857", fillColor: "#10b981" }
+          : hasPotential
+            ? { color: "#b45309", fillColor: "#f59e0b" }
+            : { color: "#64748b", fillColor: "#94a3b8" };
+
+        L.circleMarker([record.latitude, record.longitude], {
+          radius: strongPotential ? 8 : 6,
+          color: "#f8fafc",
+          weight: 2,
+          ...color,
+          fillOpacity: 0.95,
+        })
+          .bindPopup(
+            `<strong>${strongPotential ? "Mining potential" : hasPotential ? "Review potential" : "Low indication"}</strong><br>Manganese: ${grade}%<br>Ore thickness: ${thickness} m<br><small>Preliminary geological screening only.</small>`,
+          )
+          .addTo(overlays);
+      });
 
     nearbyCandidates.forEach((candidate, index) => {
       L.circleMarker([candidate.latitude, candidate.longitude], {
@@ -731,7 +762,7 @@ function InteractiveLocationMap({
         })
         .addTo(overlays);
     }
-  }, [center, locationAnalyses, nearbyCandidates, selectedLocation]);
+  }, [center, geologicalData, locationAnalyses, nearbyCandidates, selectedLocation]);
 
   return (
     <div
@@ -800,6 +831,7 @@ function NearbyAreaList({ areas, selectedLocation, onSelectNearbyArea }) {
 }
 
 function LocationPicker({
+  geologicalData = [],
   locationAnalyses = [],
   nearbyCandidates = [],
   nearbyAreas = [],
@@ -825,13 +857,20 @@ function LocationPicker({
       <InteractiveLocationMap
         center={center}
         selectedLocation={selectedLocation}
+        geologicalData={geologicalData}
         nearbyCandidates={nearbyCandidates}
         locationAnalyses={locationAnalyses}
         onSelectLocation={onSelectLocation}
       />
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-slate-600">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Suitable area
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Mining potential
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Review potential
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> Nearby candidate
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Review area
@@ -841,8 +880,9 @@ function LocationPicker({
         </span>
       </div>
       <p className="mt-2 text-[11px] leading-5 text-slate-500">
-        Shaded circles are AI screening areas around checked points, not legal
-        mining boundaries or survey results.
+        Markers use stored geological coordinates; shaded circles are AI
+        screening areas around checked points. Neither is a legal mining
+        boundary or a substitute for a field survey.
       </p>
       {nearbyCandidates.length > 0 && locationLoading && (
         <p className="mt-2 text-xs font-medium text-blue-700">
